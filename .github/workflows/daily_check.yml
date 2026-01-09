@@ -1,28 +1,30 @@
 name: Daily Assignment Check
+
 on:
   schedule:
-    - cron: '0 22 * * *'
+    - cron: '0 22 * * *' # 日本時間 朝7:00
   workflow_dispatch:
     inputs:
       check_date:
         description: 'チェックしたい日付 (YYYY-MM-DD)'
         required: false
-        default: ''
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
       - name: Install dependencies
-        run: pip install requests icalendar
+        run: |
+          pip install requests icalendar
       - name: Run script
         env:
           ICAL_URL: ${{ secrets.ICAL_URL }}
-          ICAL_URL_2: ${{ secrets.ICAL_URL_2 }}
+          ICAL_URL_2: ${{ secrets.ICAL_URL_2 }}  # ← これが抜けていると2人目が出ません
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
           CHECK_DATE: ${{ github.event.inputs.check_date }}
         run: python main.py
