@@ -24,7 +24,8 @@ def get_assignments(url, target_dates):
                 jst_end = end_dt + timedelta(hours=9) if end_dt.tzinfo else end_dt
                 end_date = jst_end.date()
                 end_time_str = jst_end.strftime('%H:%M')
-
+            
+            # 今日・明日0時・金曜なら週末分を判定
             if end_date in target_dates or (end_date == target_dates[0] + timedelta(days=1) and end_time_str == "00:00"):
                 summary = str(event.get('summary'))
                 task_url = ""
@@ -73,7 +74,7 @@ def main():
         message += "\n"
         for title, url in sorted(all_tasks.items()):
             message += f"📌 [{title}]({url})\n" if url else f"📌 {title}\n"
-        message += "\n週末も計画的にがんばるのだ！"
+        message += "\n今日も一日がんばるのだ！"
     else:
         message = f"✅ 対象期間に締め切りの課題はないのだ！"
     
