@@ -4,7 +4,9 @@ from icalendar import Calendar
 from datetime import datetime, timedelta
 import re
 
-ICAL_URL = os.environ.get('ICAL_URL')
+# GitHubのSecretsから2つのURLを読み込む
+ICAL_URL_1 = os.environ.get('ICAL_URL')
+ICAL_URL_2 = os.environ.get('ICAL_URL_2')
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
 CHECK_DATE = os.environ.get('CHECK_DATE')
 
@@ -16,19 +18,15 @@ def get_assignments(url, target_dates):
         daily_tasks = {}
         for event in cal.walk('vevent'):
             end_dt = event.get('dtend').dt
-            # 日本時間(UTC+9)へ変換
             jst_end = end_dt + timedelta(hours=9) if isinstance(end_dt, datetime) and end_dt.tzinfo else end_dt
             end_date = jst_end.date() if isinstance(jst_end, datetime) else jst_end
             
             if end_date in target_dates:
                 summary = str(event.get('summary'))
                 time_str = jst_end.strftime('%H:%M') if isinstance(jst_end, datetime) else "終日"
-                
-                # Moodleの課題ページURLを推測
                 uid = str(event.get('uid'))
                 match = re.search(r'(\d+)', uid)
                 link = f"{'/'.join(url.split('/')[:3])}/mod/assign/view.php?id={match.group(1)}" if match else ""
-                
                 label = f"[{end_date.strftime('%m/%d')}] {summary} ({time_str}締切)"
                 daily_tasks[label] = link
         return daily_tasks
@@ -38,30 +36,33 @@ def main():
     now = datetime.utcnow() + timedelta(hours=9)
     today = now.date()
     
-    # 日付指定がある場合
+    # 日付設定
     if CHECK_DATE and str(CHECK_DATE).strip():
         try:
             target_dates = [datetime.strptime(str(CHECK_DATE).strip(), '%Y-%m-%d').date()]
-            title = f"📅 {CHECK_DATE} の課題"
+            title = f"📅 {CHECK_DATE} の課題指定チェック"
         except: return
-    # 通常（金曜は週末分も）
     else:
         target_dates = [today]
-        if today.weekday() == 4: # 金曜日
+        title = f"📢 {today.strftime('%m/%d')} 課題告知"
+        if today.weekday() == 4:
             target_dates += [today + timedelta(days=1), today + timedelta(days=2)]
             title = "📢 【週末まとめ】課題告知"
-        else:
-            title = f"📢 {today.strftime('%m/%d')} の課題"
 
-    all_tasks = get_assignments(ICAL_URL, target_dates)
+    # 1つ目のURLと2つ目のURL、両方から取得して合体させる
+    tasks_1 = get_assignments(ICAL_URL_1, target_dates)
+    tasks_2 = get_assignments(ICAL_URL_2, target_dates)
+    
+    # 両方のデータを1つにまとめる
+    all_tasks = {**tasks_1, **tasks_2}
     
     if all_tasks:
         message = f"**{title}**\n\n"
+        # 締切日順に並び替えて表示
         for label, link in sorted(all_tasks.items()):
             message += f"📌 [{label}]({link})\n" if link else f"📌 {label}\n"
         message += "\n週末もがんばるのだ！"
     else:
-        # 届かない不安をなくすため、課題ゼロでも通知する
         message = f"✅ {title}：対象期間に締め切りの課題はないのだ！"
     
     requests.post(WEBHOOK_URL, json={"content": message})
