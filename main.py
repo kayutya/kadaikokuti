@@ -14,7 +14,6 @@ def get_assignments(url, target_dates):
     try:
         response = requests.get(url)
         cal = Calendar.from_ical(response.content)
-        
         daily_tasks = {}
         for event in cal.walk('vevent'):
             end_dt = event.get('dtend').dt
@@ -26,11 +25,9 @@ def get_assignments(url, target_dates):
                 end_date = jst_end.date()
                 end_time_str = jst_end.strftime('%H:%M')
 
-            # ターゲットの日付リスト（今日、明日0時、または土日）に含まれているか確認
             if end_date in target_dates or (end_date == target_dates[0] + timedelta(days=1) and end_time_str == "00:00"):
                 summary = str(event.get('summary'))
                 task_url = ""
-                
                 if event.get('url'):
                     task_url = str(event.get('url'))
                 elif event.get('uid'):
@@ -40,7 +37,6 @@ def get_assignments(url, target_dates):
                         base_url = "/".join(url.split("/")[:3])
                         task_url = f"{base_url}/mod/assign/view.php?id={match.group(1)}"
                 
-                # どの日付の課題か分かるように日付も付ける
                 date_label = end_date.strftime('%m/%d')
                 display_name = f"[{date_label}] {summary} ({end_time_str}締切)"
                 daily_tasks[display_name] = task_url
@@ -51,23 +47,19 @@ def get_assignments(url, target_dates):
 def main():
     now = datetime.utcnow() + timedelta(hours=9)
     today = now.date()
-    
-    # 検索対象の日付リストを作る
     target_dates = []
     
-    if CHECK_DATE:
+    if CHECK_DATE and CHECK_DATE.strip():
         try:
-            target_dates = [datetime.strptime(CHECK_DATE, '%Y-%m-%d').date()]
+            target_dates = [datetime.strptime(CHECK_DATE.strip(), '%Y-%m-%d').date()]
             title_part = f"📅 {CHECK_DATE} の課題指定チェック"
         except: return
     else:
         target_dates = [today]
         title_part = f"📢 {today.strftime('%Y/%m/%d')} 朝の課題チェック"
-        
-        # もし今日が金曜日(4)なら、土(5)と日(6)も追加する
         if today.weekday() == 4:
-            target_dates.append(today + timedelta(days=1)) # 土曜日
-            target_dates.append(today + timedelta(days=2)) # 日曜日
+            target_dates.append(today + timedelta(days=1))
+            target_dates.append(today + timedelta(days=2))
             title_part = f"📢 【週末まとめ】{today.strftime('%m/%d')}〜 の課題告知"
 
     tasks_1 = get_assignments(ICAL_URL_1, target_dates)
@@ -76,7 +68,7 @@ def main():
     
     if all_tasks:
         message = f"**{title_part}**\n"
-        if today.weekday() == 4 and not CHECK_DATE:
+        if not CHECK_DATE and today.weekday() == 4:
             message += "※金曜なので土日の分もまとめて教えるのだ！\n"
         message += "\n"
         for title, url in sorted(all_tasks.items()):
