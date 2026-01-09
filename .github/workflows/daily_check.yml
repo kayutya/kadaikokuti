@@ -24,5 +24,6 @@ jobs:
       - name: Run script
         env:
           ICAL_URL: ${{ secrets.ICAL_URL }}
+          ICAL_URL_2: ${{ secrets.ICAL_URL_2 }} 
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: python main.py
