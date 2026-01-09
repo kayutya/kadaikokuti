@@ -25,7 +25,7 @@ def get_assignments(url, target_dates):
                 end_date = jst_end.date()
                 end_time_str = jst_end.strftime('%H:%M')
             
-            # 今日・明日0時・金曜なら週末分を判定
+            # リスト内の日付、またはリストの最初の日（今日）の翌日00:00を判定
             if end_date in target_dates or (end_date == target_dates[0] + timedelta(days=1) and end_time_str == "00:00"):
                 summary = str(event.get('summary'))
                 task_url = ""
@@ -50,14 +50,17 @@ def main():
     today = now.date()
     target_dates = []
     
+    # 手動入力がある場合
     if CHECK_DATE and CHECK_DATE.strip():
         try:
             target_dates = [datetime.strptime(CHECK_DATE.strip(), '%Y-%m-%d').date()]
             title_part = f"📅 {CHECK_DATE} の課題指定チェック"
         except: return
+    # 通常の自動実行
     else:
         target_dates = [today]
         title_part = f"📢 {today.strftime('%Y/%m/%d')} 朝の課題チェック"
+        # 金曜日なら土日分も追加
         if today.weekday() == 4:
             target_dates.append(today + timedelta(days=1))
             target_dates.append(today + timedelta(days=2))
@@ -76,7 +79,7 @@ def main():
             message += f"📌 [{title}]({url})\n" if url else f"📌 {title}\n"
         message += "\n今日も一日がんばるのだ！"
     else:
-        message = f"✅ 対象期間に締め切りの課題はないのだ！"
+        message = f"✅ {today.strftime('%m/%d')} 締切の課題はないのだ！"
     
     requests.post(WEBHOOK_URL, json={"content": message})
 
