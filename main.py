@@ -4,7 +4,6 @@ from icalendar import Calendar
 from datetime import datetime, timedelta
 import re
 
-# 設定読み込み
 ICAL_URL_1 = os.environ.get('ICAL_URL')
 ICAL_URL_2 = os.environ.get('ICAL_URL_2')
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
@@ -13,77 +12,61 @@ CHECK_DATE = os.environ.get('CHECK_DATE')
 def get_assignments(url, target_dates):
     if not url: return {}
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         cal = Calendar.from_ical(response.content)
         daily_tasks = {}
+        
         for event in cal.walk('vevent'):
             end_dt = event.get('dtend').dt
-            if not isinstance(end_dt, datetime):
-                end_date = end_dt
-                end_time_str = "終日"
-            else:
-                # 日本時間に変換
-                jst_end = end_dt + timedelta(hours=9) if end_dt.tzinfo else end_dt
-                end_date = jst_end.date()
-                end_time_str = jst_end.strftime('%H:%M')
-            
-            # 判定（指定日、または翌日00:00）
-            if end_date in target_dates or (end_date == target_dates[0] + timedelta(days=1) and end_time_str == "00:00"):
+            # タイムゾーン考慮（JSTに変換）
+            jst_end = end_dt + timedelta(hours=9) if isinstance(end_dt, datetime) and end_dt.tzinfo else end_dt
+            end_date = jst_end.date() if isinstance(jst_end, datetime) else jst_end
+            end_time_str = jst_end.strftime('%H:%M') if isinstance(jst_end, datetime) else "終日"
+
+            # 判定（指定した日付のいずれかに合致するか）
+            if end_date in target_dates:
                 summary = str(event.get('summary'))
-                task_url = ""
+                uid = str(event.get('uid'))
+                # URL組み立て
+                match = re.search(r'(\d+)', uid)
+                task_url = f"{'/'.join(url.split('/')[:3])}/mod/assign/view.php?id={match.group(1)}" if match else ""
                 
-                # MoodleのURL組み立て
-                if event.get('url'):
-                    task_url = str(event.get('url'))
-                elif event.get('uid'):
-                    uid = str(event.get('uid'))
-                    match = re.search(r'(\d+)', uid)
-                    if match:
-                        base_url = "/".join(url.split("/")[:3])
-                        task_url = f"{base_url}/mod/assign/view.php?id={match.group(1)}"
-                
-                date_label = end_date.strftime('%m/%d')
-                display_name = f"[{date_label}] {summary} ({end_time_str}締切)"
-                daily_tasks[display_name] = task_url
+                label = f"[{end_date.strftime('%m/%d')}] {summary} ({end_time_str}締切)"
+                daily_tasks[label] = task_url
         return daily_tasks
-    except:
+    except Exception as e:
+        print(f"エラー発生: {e}")
         return {}
 
 def main():
     now = datetime.utcnow() + timedelta(hours=9)
     today = now.date()
     
-    # 日付の決定
-    if CHECK_DATE and str(CHECK_DATE).strip():
+    # 日付リスト作成
+    if CHECK_DATE and CHECK_DATE.strip():
         try:
-            target_date = datetime.strptime(str(CHECK_DATE).strip(), '%Y-%m-%d').date()
-            target_dates = [target_date]
-            title_part = f"📅 {target_date.strftime('%Y-%m-%d')} の指定チェック"
-        except:
-            return # 形式エラーなら終了
+            target_dates = [datetime.strptime(CHECK_DATE.strip(), '%Y-%m-%d').date()]
+            title = f"📅 {CHECK_DATE} の指定チェック"
+        except: return
     else:
+        # 金曜なら今日・土・日の3日分を対象にする
         target_dates = [today]
-        title_part = f"📢 {today.strftime('%Y/%m/%d')} 朝の課題チェック"
-        # 金曜日なら土日分も追加
+        title = f"📢 {today.strftime('%Y/%m/%d')} 課題告知"
         if today.weekday() == 4:
-            target_dates.append(today + timedelta(days=1))
-            target_dates.append(today + timedelta(days=2))
-            title_part = f"📢 【週末まとめ】{today.strftime('%m/%d')}〜 の告知"
+            target_dates += [today + timedelta(days=1), today + timedelta(days=2)]
+            title = "📢 【週末まとめ】課題告知"
 
-    # 取得と実行
-    tasks_1 = get_assignments(ICAL_URL_1, target_dates)
-    tasks_2 = get_assignments(ICAL_URL_2, target_dates)
-    all_tasks = {**tasks_1, **tasks_2}
+    t1 = get_assignments(ICAL_URL_1, target_dates)
+    t2 = get_assignments(ICAL_URL_2, target_dates)
+    all_tasks = {**t1, **t2}
     
     if all_tasks:
-        message = f"**{title_part}**\n\n"
-        for title, url in sorted(all_tasks.items()):
-            message += f"📌 [{title}]({url})\n" if url else f"📌 {title}\n"
-        message += "\n今日もがんばるのだ！"
+        msg = f"**{title}**\n\n" + "\n".join([f"📌 [{k}]({v})" if v else f"📌 {k}" for k, v in sorted(all_tasks.items())])
+        msg += "\n\n週末もがんばるのだ！"
     else:
-        message = f"✅ 対象期間の課題はないのだ！"
+        msg = f"✅ {today.strftime('%m/%d')} 付近に締め切りの課題はないのだ！"
     
-    requests.post(WEBHOOK_URL, json={"content": message})
+    requests.post(WEBHOOK_URL, json={"content": msg})
 
 if __name__ == "__main__":
     main()
