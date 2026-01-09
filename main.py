@@ -18,7 +18,7 @@ def get_assignments(url, target_dates):
         daily_tasks = {}
         for event in cal.walk('vevent'):
             end_dt = event.get('dtend').dt
-            # 常に日本時間(UTC+9)に直して判定
+            # 日本時間(JST)に変換して判定
             jst_end = end_dt + timedelta(hours=9) if isinstance(end_dt, datetime) and end_dt.tzinfo else end_dt
             end_date = jst_end.date() if isinstance(jst_end, datetime) else jst_end
             
@@ -34,24 +34,23 @@ def get_assignments(url, target_dates):
     except: return {}
 
 def main():
+    # 日本時間を取得
     now_jst = datetime.utcnow() + timedelta(hours=9)
     today = now_jst.date()
     
     if CHECK_DATE and str(CHECK_DATE).strip():
         try:
-            target_date = datetime.strptime(str(CHECK_DATE).strip(), '%Y-%m-%d').date()
-            target_dates = [target_date]
-            title = f"📅 {target_date.strftime('%Y-%m-%d')} の指定チェック"
+            target_dates = [datetime.strptime(str(CHECK_DATE).strip(), '%Y-%m-%d').date()]
+            title = f"📅 {CHECK_DATE} の指定チェック"
         except: return
     else:
         target_dates = [today]
         title = f"📢 {today.strftime('%Y/%m/%d')} 課題告知"
-        # 金曜（4）なら土日分も追加
+        # 金曜日なら、土曜(1)・日曜(2)・月曜の朝(3)までを範囲に入れる
         if today.weekday() == 4:
-            target_dates += [today + timedelta(days=1), today + timedelta(days=2)]
+            target_dates += [today + timedelta(days=1), today + timedelta(days=2), today + timedelta(days=3)]
             title = "📢 【週末まとめ】課題告知"
 
-    # 2つのURLを読み込む
     tasks_1 = get_assignments(ICAL_URL_1, target_dates)
     tasks_2 = get_assignments(ICAL_URL_2, target_dates)
     all_tasks = {**tasks_1, **tasks_2}
@@ -67,4 +66,4 @@ def main():
     requests.post(WEBHOOK_URL, json={"content": message})
 
 if __name__ == "__main__":
-    main()
+    main()main()
