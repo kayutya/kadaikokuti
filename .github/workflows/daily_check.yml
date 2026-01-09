@@ -1,13 +1,11 @@
 name: Daily Assignment Check
 on:
   schedule:
-    # 毎日 日本時間 朝7時（UTC 22:00）に自動実行
     - cron: '0 22 * * *'
   workflow_dispatch:
-    # 手動実行のときに日付を入力できるようにする設定
     inputs:
       check_date:
-        description: 'チェックしたい日付 (例: 2026-01-15)'
+        description: 'チェックしたい日付 (YYYY-MM-DD)'
         required: false
         default: ''
 
@@ -15,23 +13,16 @@ jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
       - name: Install dependencies
-        run: |
-          pip install requests icalendar
-
+        run: pip install requests icalendar
       - name: Run script
         env:
           ICAL_URL: ${{ secrets.ICAL_URL }}
           ICAL_URL_2: ${{ secrets.ICAL_URL_2 }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-          # ここで入力された日付（check_date）をプログラムに渡す
           CHECK_DATE: ${{ github.event.inputs.check_date }}
         run: python main.py
