@@ -4,7 +4,7 @@ from icalendar import Calendar
 from datetime import datetime, timedelta
 import re
 
-# GitHubのSecretsから2つのURLを読み込む
+# Secretsから取得
 ICAL_URL_1 = os.environ.get('ICAL_URL')
 ICAL_URL_2 = os.environ.get('ICAL_URL_2')
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
@@ -18,6 +18,7 @@ def get_assignments(url, target_dates):
         daily_tasks = {}
         for event in cal.walk('vevent'):
             end_dt = event.get('dtend').dt
+            # 常に日本時間(UTC+9)に直して判定
             jst_end = end_dt + timedelta(hours=9) if isinstance(end_dt, datetime) and end_dt.tzinfo else end_dt
             end_date = jst_end.date() if isinstance(jst_end, datetime) else jst_end
             
@@ -33,37 +34,35 @@ def get_assignments(url, target_dates):
     except: return {}
 
 def main():
-    now = datetime.utcnow() + timedelta(hours=9)
-    today = now.date()
+    now_jst = datetime.utcnow() + timedelta(hours=9)
+    today = now_jst.date()
     
-    # 日付設定
     if CHECK_DATE and str(CHECK_DATE).strip():
         try:
-            target_dates = [datetime.strptime(str(CHECK_DATE).strip(), '%Y-%m-%d').date()]
-            title = f"📅 {CHECK_DATE} の課題指定チェック"
+            target_date = datetime.strptime(str(CHECK_DATE).strip(), '%Y-%m-%d').date()
+            target_dates = [target_date]
+            title = f"📅 {target_date.strftime('%Y-%m-%d')} の指定チェック"
         except: return
     else:
         target_dates = [today]
-        title = f"📢 {today.strftime('%m/%d')} 課題告知"
+        title = f"📢 {today.strftime('%Y/%m/%d')} 課題告知"
+        # 金曜（4）なら土日分も追加
         if today.weekday() == 4:
             target_dates += [today + timedelta(days=1), today + timedelta(days=2)]
             title = "📢 【週末まとめ】課題告知"
 
-    # 1つ目のURLと2つ目のURL、両方から取得して合体させる
+    # 2つのURLを読み込む
     tasks_1 = get_assignments(ICAL_URL_1, target_dates)
     tasks_2 = get_assignments(ICAL_URL_2, target_dates)
-    
-    # 両方のデータを1つにまとめる
     all_tasks = {**tasks_1, **tasks_2}
     
     if all_tasks:
         message = f"**{title}**\n\n"
-        # 締切日順に並び替えて表示
         for label, link in sorted(all_tasks.items()):
             message += f"📌 [{label}]({link})\n" if link else f"📌 {label}\n"
         message += "\n週末もがんばるのだ！"
     else:
-        message = f"✅ {title}：対象期間に締め切りの課題はないのだ！"
+        message = f"✅ {title}\n対象期間に締め切りの課題はなかったのだ！"
     
     requests.post(WEBHOOK_URL, json={"content": message})
 
