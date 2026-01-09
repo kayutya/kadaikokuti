@@ -45,7 +45,7 @@ def main():
                 message += f"📌 [{title}]({url})\n"
             else:
                 message += f"📌 {title}\n"
-        message += "\n今日の課題なのだ！"
+        message += "\nちゃんと提出するのだ！"
     else:
         message = f"✅ {today_str} が締め切りの課題はないのだ！"
     
