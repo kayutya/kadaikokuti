@@ -45,6 +45,7 @@ def get_assignments(url, target_dates):
     except: return {}
 
 def main():
+    print(f"URL1: {bool(ICAL_URL_1)}, URL2: {bool(ICAL_URL_2)}")
     now_jst = datetime.utcnow() + timedelta(hours=9)
     today = now_jst.date()
     
