@@ -9,7 +9,7 @@ ICAL_URL_2 = os.environ.get('ICAL_URL_2')
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
 CHECK_DATE = os.environ.get('CHECK_DATE')
 
-def get_assignments(url, target_dates, limit_dt_jst):
+def get_assignments(url, target_dates):
     if not url: return {}
     try:
         response = requests.get(url, timeout=15)
@@ -17,21 +17,28 @@ def get_assignments(url, target_dates, limit_dt_jst):
         tasks = {}
         for event in cal.walk('vevent'):
             end_dt = event.get('dtend').dt
+            # 日本時間に変換
             jst_end = end_dt + timedelta(hours=9) if isinstance(end_dt, datetime) and end_dt.tzinfo else end_dt
-            check_date = jst_end.date() if isinstance(jst_end, datetime) else jst_end
             
-            # 【判定を修正】日付リストに入っている、または制限時刻（月曜朝）より前なら採用
-            is_in_dates = check_date in target_dates
-            is_before_limit = isinstance(jst_end, datetime) and jst_end <= limit_dt_jst
+            # 【ロジック変更】00:00締切は「前日の24:00」として扱う
+            display_dt = jst_end
+            if isinstance(jst_end, datetime) and jst_end.time() == time(0, 0):
+                display_dt = jst_end - timedelta(minutes=1)
             
-            if is_in_dates or is_before_limit:
+            check_date = display_dt.date() if isinstance(display_dt, datetime) else display_dt
+            
+            if check_date in target_dates:
                 summary = str(event.get('summary'))
                 time_str = jst_end.strftime('%H:%M') if isinstance(jst_end, datetime) else "終日"
                 uid = str(event.get('uid'))
                 match = re.search(r'(\d+)', uid)
                 link = f"{'/'.join(url.split('/')[:3])}/mod/assign/view.php?id={match.group(1)}" if match else ""
                 
-                sort_key = jst_end.strftime('%m%d%H%M') if isinstance(jst_end, datetime) else check_date.strftime('%m%d9999')
+                # 並び替え用：日付+時間（00:00をその日の最後に持ってくる場合は23:59扱いにする）
+                sort_time = jst_end.strftime('%m%d%H%M')
+                if jst_end.time() == time(0, 0):
+                    sort_time = (jst_end - timedelta(minutes=1)).strftime('%m%d2400')
+                
                 label = f"[{check_date.strftime('%m/%d')}] {summary} ({time_str}締切)"
                 tasks[sort_key] = {"label": label, "link": link}
         return tasks
@@ -41,42 +48,61 @@ def main():
     now_jst = datetime.utcnow() + timedelta(hours=9)
     today = now_jst.date()
     
-    # 手動指定がある場合
+    # デフォルトのタイトルと検索範囲
+    target_dates = [today]
+    title = f"📢 {today.strftime('%Y/%m/%d')} 課題告知"
+
     if CHECK_DATE and str(CHECK_DATE).strip():
         try:
             target_date = datetime.strptime(str(CHECK_DATE).strip(), '%Y-%m-%d').date()
             target_dates = [target_date]
-            limit_dt_jst = datetime.combine(target_date, time(23, 59))
             title = f"📅 {CHECK_DATE} の指定チェック"
         except: return
-    # 自動判定（空欄）の場合
     else:
-        # 基本は「今日」
-        target_dates = [today]
-        limit_dt_jst = datetime.combine(today, time(23, 59))
-        title = f"📢 {today.strftime('%Y/%m/%d')} 課題告知"
-
-        # 土曜日の場合：今日(土)・明日(日)・明後日(月)の朝9時までを全部入れる
-        if today.weekday() == 5:
-            target_dates = [today, today + timedelta(days=1)] # 土、日
-            limit_dt_jst = datetime.combine(today + timedelta(days=2), time(9, 0)) # 月曜朝9時
-            title = "📢 【土曜/月曜朝まで】課題告知"
-        # 金曜日の場合：今日(金)・明日(土)・明後日(日)を全部入れる
-        elif today.weekday() == 4:
-            target_dates = [today, today + timedelta(days=1), today + timedelta(days=2)]
-            limit_dt_jst = datetime.combine(today + timedelta(days=2), time(23, 59))
-            title = "📢 【週末まとめ】課題告知"
+        # 金(4)・土(5)・日(6)なら、金・土・日の3日間を常にまとめて告知
+        if today.weekday() in [4, 5, 6]:
+            # その週の金曜日を基準にする
+            friday = today - timedelta(days=(today.weekday() - 4))
+            target_dates = [friday, friday + timedelta(days=1), friday + timedelta(days=2)]
+            # 月曜00:00（日曜深夜）まで含めるため、月曜も判定に入れる
+            target_dates.append(friday + timedelta(days=3))
+            title = "📢 【週末まとめ】（金・土・日・月朝）"
 
     all_data = {}
-    all_data.update(get_assignments(ICAL_URL_1, target_dates, limit_dt_jst))
-    all_data.update(get_assignments(ICAL_URL_2, target_dates, limit_dt_jst))
+    # get_assignments を改良（target_datesのみで判定）
+    def get_tasks_v2(url, dates):
+        if not url: return {}
+        try:
+            response = requests.get(url, timeout=15)
+            cal = Calendar.from_ical(response.content)
+            tasks = {}
+            for event in cal.walk('vevent'):
+                end_dt = event.get('dtend').dt
+                jst_end = end_dt + timedelta(hours=9) if isinstance(end_dt, datetime) and end_dt.tzinfo else end_dt
+                
+                # 00:00を前日の24:00として判定
+                adj_dt = jst_end - timedelta(minutes=1) if (isinstance(jst_end, datetime) and jst_end.time() == time(0,0)) else jst_end
+                if adj_dt.date() in dates:
+                    summary = str(event.get('summary'))
+                    time_str = jst_end.strftime('%H:%M')
+                    uid = str(event.get('uid'))
+                    match = re.search(r'(\d+)', uid)
+                    link = f"{'/'.join(url.split('/')[:3])}/mod/assign/view.php?id={match.group(1)}" if match else ""
+                    sort_key = adj_dt.strftime('%m%d%H%M')
+                    label = f"[{adj_dt.strftime('%m/%d')}] {summary} ({time_str}締切)"
+                    tasks[sort_key] = {"label": label, "link": link}
+            return tasks
+        except: return {}
+
+    all_data.update(get_tasks_v2(ICAL_URL_1, target_dates))
+    all_data.update(get_tasks_v2(ICAL_URL_2, target_dates))
     
     if all_data:
         message = f"**{title}**\n\n"
         for key in sorted(all_data.keys()):
             item = all_data[key]
             message += f"📌 [{item['label']}]({item['link']})\n" if item['link'] else f"📌 {item['label']}\n"
-        message += "\n早めに終わらせるのが吉なのだ！"
+        message += "\n週末も計画的にがんばるのだ！"
     else:
         message = f"✅ {title}\n対象期間に締め切りの課題はなかったのだ！"
     
