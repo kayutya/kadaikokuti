@@ -18,14 +18,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5 # 最新版に更新
         with:
           python-version: '3.9'
-          cache: 'pip' # pipキャッシュ有効花
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
-          pip install requests icalendar
+          pip install -r requirements.txt # ファイルからインストールするように変更
 
       - name: Run script
         env:
@@ -33,6 +33,5 @@ jobs:
           ICAL_URL_2: ${{ secrets.ICAL_URL_2 }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
           CHECK_DATE: ${{ github.event.inputs.check_date }}
-          # 出力リアルタイムでログに表示
           PYTHONUNBUFFERED: "1" 
         run: python main.py
