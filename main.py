@@ -146,7 +146,7 @@ def main():
         for k in sorted_keys:
             item = filtered[k]
             message += f"📌 [{item['label']}]({item['link']})\n" if item['link'] else f"📌 {item['label']}\n"
-        message += "\n早めに終わらせるのだ！ ういはvEを早く買うのだ"
+        message += "\n@shungrang 31日のGUIテストはなくなったのだ!"
     else:
         message = f"✅ {title}\n対象期間に締め切りの課題はないのだ！"
     
