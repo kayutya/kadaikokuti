@@ -15,17 +15,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Set up Python
-        uses: actions/setup-python@v5 # 最新版に更新
+        uses: actions/setup-python@v5.4.0
         with:
           python-version: '3.9'
           cache: 'pip'
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt # ファイルからインストールするように変更
+          pip install -r requirements.txt
 
       - name: Run script
         env:
