@@ -140,17 +140,17 @@ def main():
             if task_date == today: filtered[k] = v
             elif task_date == (today + timedelta(days=1)) and v["is_morning"]: filtered[k] = v
 
-   if filtered:
-    message = f"**{title}**\n\n"
-    sorted_keys = sorted(filtered.keys(), key=lambda x: filtered[x]["sort"])
-    for k in sorted_keys:
-        item = filtered[k]
-        message += f"📌 [{item['label']}]({item['link']})\n" if item['link'] else f"📌 {item['label']}\n"
-    
-    user_id = "1365575764959035455"
-    message += f"\n<@{user_id}> 31日のGUIテストはなくなったのだ!"
-    
-    send_discord(message)
+    if filtered:
+        message = f"**{title}**\n\n"
+        sorted_keys = sorted(filtered.keys(), key=lambda x: filtered[x]["sort"])
+        for k in sorted_keys:
+            item = filtered[k]
+            message += f"📌 [{item['label']}]({item['link']})\n" if item['link'] else f"📌 {item['label']}\n"
+        
+        user_id = "1365575764959035455"
+        message += f"\n<@{user_id}> 31日のGUIテストはなくなったのだ!"
+        
+        send_discord(message)
 
 if __name__ == "__main__":
     main()
