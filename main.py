@@ -148,7 +148,7 @@ def main():
             message += f"📌 [{item['label']}]({item['link']})\n" if item['link'] else f"📌 {item['label']}\n"
         
         user_id = "808264919862214658"
-        message += f"\n<@{user_id}> よんだだけだよ～ん＾＾"
+        message += f"\n<@{user_id}> よんだだけなのだ＾＾"
         
         send_discord(message)
 
