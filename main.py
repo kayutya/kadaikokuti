@@ -147,8 +147,8 @@ def main():
             item = filtered[k]
             message += f"📌 [{item['label']}]({item['link']})\n" if item['link'] else f"📌 {item['label']}\n"
         
-        user_id = "1319994395616874559"
-        message += f"\n<@{user_id}> 早くPVE買え!"
+        user_id = "808264919862214658"
+        message += f"\n<@{user_id}> よんだだけだよ～ん＾＾"
         
         send_discord(message)
 
